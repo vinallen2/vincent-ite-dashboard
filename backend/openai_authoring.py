@@ -55,7 +55,14 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
         }, json=payload)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get('error', {})
+                message = str(detail.get('message', 'OpenAI rejected the request'))[:500]
+                code = str(detail.get('code', 'unknown'))[:100]
+            except (ValueError, AttributeError):
+                message, code = 'OpenAI rejected the request', 'unknown'
+            raise RuntimeError(f'OpenAI API HTTP {response.status_code}, code={code}: {message}')
         data = response.json()
     if data.get("status") != "completed":
         raise RuntimeError("OpenAI response was not completed")
