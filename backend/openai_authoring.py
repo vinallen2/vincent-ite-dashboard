@@ -7,7 +7,7 @@ import json
 import os
 import httpx
 
-MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-5-mini")
+MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-4.1-mini")
 ENDPOINT = "https://api.openai.com/v1/responses"
 
 SYSTEM = """You are authoring original CA-2 anesthesiology ITE practice material.
@@ -47,10 +47,10 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
         "model": model or MODEL,
         "instructions": SYSTEM,
         "input": "Return only a valid JSON object matching the requested output shape.\n" + prompt,
-        "max_output_tokens": 7000,
+        "max_output_tokens": 5000,
         "text": {"format": {"type": "json_object"}}
     }
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(55.0, connect=10.0)) as client:
         response = await client.post(ENDPOINT, headers={
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
