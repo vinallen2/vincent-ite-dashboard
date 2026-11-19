@@ -1,0 +1,12 @@
+[project]
+name = "vincent-ite-dashboard"
+version = "0.1.0"
+description = "Private anesthesiology ITE study dashboard migration"
+requires-python = ">=3.13"
+dependencies = ["fastapi>=0.115"]
+
+[dependency-groups]
+dev = ["pytest>=8", "workers-py", "workers-runtime-sdk"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
