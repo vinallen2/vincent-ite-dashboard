@@ -20,12 +20,37 @@ async def build_authoring_context(db, *, today: str, kind: str = "daily") -> dic
         "SELECT topic,due_date,reason,status,last_evidence FROM study_reviews "
         "WHERE status IN ('Planned','Backlog') ORDER BY due_date LIMIT 40"
     )
+    # Prior website sessions, including generated sessions that have not yet been answered.
+    # This prevents consecutive bonus sessions from recycling the same objectives.
+    legacy_row = await db.one("SELECT value FROM study_state WHERE key='legacy'")
+    historical_questions = []
+    if legacy_row:
+        tabs = json.loads(legacy_row["value"]).get("tabs", {})
+        for row in tabs.get("Question Log", [])[1:]:
+            if len(row) >= 10 and row[4]:
+                historical_questions.append({
+                    "date": row[0], "domain": row[3], "topic": row[4],
+                    "correct": str(row[7]).strip().lower() in ("1", "true"),
+                    "confidence": row[8], "errorType": row[9],
+                })
+    today_topics = set()
+    today_objectives = set()
+    recent_topics = []
     prior = []
     for row in sessions:
         p = json.loads(row["payload"])
         for q in p.get("questions", []):
+            topic = (q.get("topic") or "").strip()
+            objective = (q.get("objective") or "").strip()
             prior.append({"date": row["date"], "domain": q.get("domain"),
-                          "topic": q.get("topic"), "objective": q.get("objective")})
+                          "topic": topic, "objective": objective})
+            if row["date"] == today:
+                if topic:
+                    today_topics.add(topic.casefold())
+                if objective:
+                    today_objectives.add(objective.casefold())
+            if topic and len(recent_topics) < 36:
+                recent_topics.append({"date": row["date"], "topic": topic, "domain": q.get("domain")})
     recent = []
     topic_stats = {}
     for row in attempts:
@@ -41,15 +66,32 @@ async def build_authoring_context(db, *, today: str, kind: str = "daily") -> dic
                                "objective": q.get("objective"), "correct": bool(q.get("correct")),
                                "confidence": q.get("confidence"),
                                "errorType": q.get("errorType")})
+    for h in historical_questions:
+        topic = h["topic"] or "Uncategorized"
+        stat = topic_stats.setdefault(topic, {"correct": 0, "total": 0, "uncertain": 0})
+        stat["total"] += 1
+        stat["correct"] += int(h["correct"])
+        stat["uncertain"] += int(str(h.get("confidence") or "").lower() in ("low", "unsure", "guessed"))
+    due = [
+        dict(topic=r["topic"], due_date=r.get("due_date"), reason=r.get("reason"))
+        for r in reviews
+        if (not r.get("due_date") or r["due_date"] <= today)
+        and (r.get("topic") or "").strip().casefold() not in today_topics
+    ]
     return {
         "date": today, "kind": kind,
         "instructions": "Prioritize missed/uncertain objectives; avoid duplicating prior scored objectives. "
                         "Do not interpret an incorrect choice as a known reasoning error.",
         "topic_performance": topic_stats,
         "recent_attempts": recent,
+        "historical_question_log": historical_questions[-60:],
         "prior_objectives": prior[:360],
-        "due_reviews": [dict(topic=r["topic"], due_date=r.get("due_date"),
-                             reason=r.get("reason")) for r in reviews if not r.get("due_date") or r["due_date"] <= today],
+        "recently_used_topics": recent_topics,
+        "already_tested_today": {
+            "topics": sorted(today_topics),
+            "objectives": sorted(today_objectives),
+        },
+        "due_reviews": due[:20],
         "upcoming_reviews": [dict(topic=r["topic"], due_date=r.get("due_date"))
                              for r in reviews if r.get("due_date") and r["due_date"] > today][:15],
     }
