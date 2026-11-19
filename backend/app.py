@@ -70,6 +70,28 @@ def create_app(store=None, token=None, now=None):
         if not isinstance(p,dict): raise StudyError('Expected a JSON object.')
         return p
 
+    @app.post('/api/generate-draft')
+    async def generate_draft(request:Request):
+        # Explicitly opt-in. Never automatically publish unverified medical content.
+        if os.environ.get('ITE_ENABLE_GENERATION') != 'true':
+            raise StudyError('Generation is not enabled.',503)
+        from .authoring_context import build_authoring_context, prepare_session
+        from .openai_authoring import draft_session
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        p = await body(request)
+        kind = p.get('kind','daily')
+        today = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+        session_id = ('CA2-Bonus ' if kind == 'bonus' else 'CA2-New ') + today
+        existing = await request.state.study.db.one('SELECT id FROM study_sessions WHERE id=?',session_id)
+        if existing:
+            return {'status':'exists','sessionId':session_id}
+        context = await build_authoring_context(request.state.study.db,today=today,kind=kind)
+        draft = await draft_session(context,kind=kind)
+        session = prepare_session(draft,today=today,kind=kind)
+        # Draft-only until references and answer keys can be independently verified.
+        return {'status':'requires_verification','session':session}
+
     @app.post('/api/submit')
     async def submit(request:Request):
         if not request.headers.get('oai-authenticated-user-id'):
