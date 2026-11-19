@@ -89,8 +89,8 @@ def create_app(store=None, token=None, now=None):
         context = await build_authoring_context(request.state.study.db,today=today,kind=kind)
         draft = await draft_session(context,kind=kind)
         session = prepare_session(draft,today=today,kind=kind)
-        # Draft-only until references and answer keys can be independently verified.
-        return {'status':'requires_verification','session':session}
+        saved = await request.state.study.publish(session)
+        return {'status':'published','sessionId':session_id,'created':saved['created'],'questions':3}
 
     @app.post('/api/submit')
     async def submit(request:Request):
