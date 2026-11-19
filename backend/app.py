@@ -42,14 +42,23 @@ def create_app(store=None, token=None, now=None):
         log.warning('Daily ITE OpenAI generation published: %s, created=%s',session_id,saved['created'])
 
     async def generation_loop():
+        # One scheduled attempt per calendar day at 6 AM America/New_York.
+        # On startup after 6 AM, perform one catch-up attempt if today's session is missing.
+        from datetime import timedelta
+        last_attempt_date = None
         while True:
-            try:
-                local = datetime.now(ZoneInfo('America/New_York'))
-                if local.hour >= 6:
+            local = datetime.now(ZoneInfo('America/New_York'))
+            if local.hour >= 6 and last_attempt_date != local.date():
+                last_attempt_date = local.date()
+                try:
                     await publish_daily_if_missing()
-            except Exception:
-                log.exception('Daily ITE OpenAI generation failed')
-            await asyncio.sleep(3600)
+                except Exception:
+                    log.exception('Daily ITE OpenAI generation failed; no automatic retry today')
+            local = datetime.now(ZoneInfo('America/New_York'))
+            next_run = local.replace(hour=6,minute=0,second=0,microsecond=0)
+            if next_run <= local:
+                next_run += timedelta(days=1)
+            await asyncio.sleep(max(1,(next_run-local).total_seconds()))
 
     @app.on_event('startup')
     async def start_generation():
