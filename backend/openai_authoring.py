@@ -46,7 +46,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
     payload = {
         "model": model or MODEL,
         "instructions": SYSTEM,
-        "input": prompt,
+        "input": "Return only a valid JSON object matching the requested output shape.\n" + prompt,
         "max_output_tokens": 7000,
         "text": {"format": {"type": "json_object"}}
     }
