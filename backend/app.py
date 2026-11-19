@@ -5,10 +5,12 @@ never accepts a user id header as authentication without the shared secret.
 """
 import hmac
 import json
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from .service import StudyService, StudyError, WORKFLOW
 from .storage import D1Store
+from .d1_http import D1HTTPStore
 
 HEADERS = {'cache-control':'private, no-store, max-age=0','x-content-type-options':'nosniff'}
 
@@ -19,16 +21,25 @@ def create_app(store=None, token=None, now=None):
     @app.middleware('http')
     async def private_gateway(request, call_next):
         env = request.scope.get('env')
-        expected = token or getattr(env,'GATEWAY_TOKEN','')
+        expected = token or getattr(env,'GATEWAY_TOKEN','') or os.environ.get('GATEWAY_TOKEN','')
         actual = request.headers.get('x-ite-gateway-token','')
         if not expected or not hmac.compare_digest(str(expected).encode('utf-8'), actual.encode('utf-8')):
             return JSONResponse({'error':'Private study backend.'},status_code=401,headers=HEADERS)
         if request.method == 'POST':
             origin = request.headers.get('origin')
-            allowed = str(getattr(env,'SITE_ORIGIN','https://vincent-ite-study-dashboard.grittypeach1026.chatgpt.site'))
+            allowed = str(getattr(env,'SITE_ORIGIN',None) or os.environ.get('SITE_ORIGIN','https://vincent-ite-study-dashboard.grittypeach1026.chatgpt.site'))
             if origin and origin != allowed or request.headers.get('sec-fetch-site') == 'cross-site':
                 return JSONResponse({'error':'Same-origin request required.'},status_code=403,headers=HEADERS)
-        request.state.study = StudyService(store or D1Store(env.DB),now)
+        if store is not None:
+            db = store
+        elif env is not None and getattr(env, 'DB', None) is not None:
+            db = D1Store(env.DB)
+        else:
+            try:
+                db = D1HTTPStore(os.environ.get('CLOUDFLARE_ACCOUNT_ID'), os.environ.get('CLOUDFLARE_D1_DATABASE_ID'), os.environ.get('CLOUDFLARE_API_TOKEN'))
+            except ValueError:
+                return JSONResponse({'error':'Study database is not configured.'},status_code=503,headers=HEADERS)
+        request.state.study = StudyService(db,now)
         try:
             response = await call_next(request)
         except Exception:
