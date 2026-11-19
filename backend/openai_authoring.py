@@ -17,7 +17,18 @@ questions, each with exactly three answer options labeled A, B, C (or four label
 and one integration. Give substantive rationales for all answer choices.
 Avoid repeated objectives supplied in context. Do not invent article citations,
 DOIs, guidelines, or URLs. Include at least one HTTPS source per question;\nprefer stable, well-known primary references and flag uncertain citations.
-These are educational practice questions, not official ABA items."""
+These are educational practice questions, not official ABA items.
+IMPORTANT QUESTION SELECTION: Check the already_tested_today list, including unattempted
+published sessions. Never repeat those topics, objectives, or near-equivalent questions in a
+second daily/bonus session on the same day. Across a session, use three clearly different
+anesthesiology domains. Select at most ONE concept that is genuinely due for spaced review;
+use a fresh clinical scenario and a different cognitive task when reviewing it. The other
+two questions should diversify toward underexposed ABA ITE domains. Use older incorrect or
+uncertain responses as a reason to revisit concepts on subsequent days, not to drill the
+same three topics repeatedly on the same day. Do not simply copy a prior stem or option set.
+Do not let prior performance crowd out broad CA-2 ITE coverage. Prefer hemodynamic,
+pharmacologic, respiratory, pediatric, obstetric, cardiac, neuro, regional, and equipment
+domains in rotation. Difficulty should be realistic for the February 2027 ITE."""
 
 async def draft_session(context: dict, *, kind: str = "daily", model: str | None = None) -> dict:
     """Draft only; caller must validate and verify before persisting."""
@@ -30,6 +41,15 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
         "task": "Prepare a review-first CA-2 ITE session",
         "kind": kind,
         "performance_and_previous_objectives": context,
+        "selection_requirements": {
+            "count": 3,
+            "unique_anesthesia_domains": 3,
+            "same_day_topic_or_objective_repetition": "forbidden, even if previous session was unattempted",
+            "due_for_spaced_review": "zero or one question, only if concept not already tested today",
+            "other_questions": "new domains and different objectives, testing clinical application",
+            "prior_stem_reuse": "forbidden",
+            "source_quality": "reliable reference URLs, do not fabricate citations"
+        },
         "output_shape": {
             "title": "string",
             "teaching": "string",
@@ -76,10 +96,24 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
         raise ValueError("Invalid draft: requires teaching and exactly three questions")
     for question in questions:
         opts = question.get("options", [])
-        if sorted(o.get("id") for o in opts) != ["A", "B", "C"]:
+        if sorted(o.get("id") for o in opts) not in (["A", "B", "C"], ["A", "B", "C", "D"]):
             raise ValueError("Each question must have A/B/C or A/B/C/D choices")
         if question.get("answer") not in ("A", "B", "C", "D"):
             raise ValueError("Invalid answer key")
         if not all(o.get("explanation") for o in opts):
             raise ValueError("Every option requires an explanation")
+    # Mechanical backstop: reject a repeated topic on the same calendar day.
+    # This checks both previously published (including unanswered) and this draft.
+    previous_topics = set(context.get("already_tested_today", {}).get("topics", []))
+    draft_topics = set()
+    domains = set()
+    for question in questions:
+        topic = str(question.get("topic") or "").strip().casefold()
+        domain = str(question.get("domain") or "").strip().casefold()
+        if not topic or topic in previous_topics or topic in draft_topics:
+            raise ValueError("Duplicate or empty ITE topic; request a fresh varied set")
+        draft_topics.add(topic)
+        domains.add(domain)
+    if len(domains) != 3:
+        raise ValueError("ITE questions must cover three distinct domains")
     return draft
