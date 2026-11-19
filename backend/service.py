@@ -87,7 +87,7 @@ def view(session_row, attempt=None):
     p['kind'] = 'bonus' if bonus(p) else 'daily'
     if not attempt:
         p['questions'] = [dict(id=q['id'],stem=q['stem'],options=[dict(id=o['id'],text=o['text']) for o in q['options']]) for q in p['questions']]
-        p['review'], p['teaching'] = [], ''
+        p['review'] = []  # Lesson stays visible before answering; keys remain hidden.
     p['attempt'] = dict(id=attempt['id'],result=json.loads(attempt['result']),status=attempt['sync_status'],receipt=json.loads(attempt['sync_receipt']) if attempt.get('sync_receipt') else None) if attempt else None
     p['createdAt'] = session_row['created_at']
     return p
