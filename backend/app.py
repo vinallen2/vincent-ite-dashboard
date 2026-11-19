@@ -116,7 +116,8 @@ def create_app(store=None, token=None, now=None):
         try:
             response = await call_next(request)
         except Exception:
-            return JSONResponse({'error':'Storage request failed. Your existing records are preserved.'},status_code=500,headers=HEADERS)
+            logging.getLogger('ite.backend').exception('Request failed on %s', request.url.path)
+            return JSONResponse({'error':'Request failed on the server. Existing study records are preserved.'},status_code=500,headers=HEADERS)
         response.headers.update(HEADERS)
         return response
 
