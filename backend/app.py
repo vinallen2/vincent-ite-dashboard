@@ -167,13 +167,26 @@ def create_app(store=None, token=None, now=None):
         p = await body(request)
         kind = p.get('kind','daily')
         today = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
-        session_id = ('CA2-Bonus ' if kind == 'bonus' else 'CA2-New ') + today
-        existing = await request.state.study.db.one('SELECT id FROM study_sessions WHERE id=?',session_id)
-        if existing:
-            return {'status':'exists','sessionId':session_id}
+        base_id = ('CA2-Bonus ' if kind == 'bonus' else 'CA2-New ') + today
+        if kind not in ('daily','bonus'):
+            raise StudyError('Invalid session kind.',400)
+        if kind == 'bonus':
+            rows = await request.state.study.db.all('SELECT id FROM study_sessions WHERE date=?',today)
+            used = {r['id'] for r in rows}
+            session_id = base_id
+            number = 2
+            while session_id in used:
+                session_id = base_id + ' #' + str(number)
+                number += 1
+        else:
+            session_id = base_id
+            existing = await request.state.study.db.one('SELECT id FROM study_sessions WHERE id=?',session_id)
+            if existing:
+                return {'status':'exists','sessionId':session_id}
         context = await build_authoring_context(request.state.study.db,today=today,kind=kind)
         draft = await draft_session(context,kind=kind)
         session = prepare_session(draft,today=today,kind=kind)
+        session['id'] = session_id
         saved = await request.state.study.publish(session)
         return {'status':'published','sessionId':session_id,'created':saved['created'],'questions':3}
 
