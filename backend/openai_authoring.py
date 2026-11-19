@@ -13,7 +13,7 @@ ENDPOINT = "https://api.openai.com/v1/responses"
 SYSTEM = """You are authoring original CA-2 anesthesiology ITE practice material.
 Return a valid JSON object only. Begin with a concise teaching review that does not reveal
 answers. Write exactly three clinically realistic, challenging multiple-choice
-questions with one unambiguously correct answer each. Two must test application
+questions, each with exactly three answer options labeled A, B, C (or four labeled A, B, C, D), with one unambiguously correct answer each. Two must test application
 and one integration. Give substantive rationales for all answer choices.
 Avoid repeated objectives supplied in context. Do not invent article citations,
 DOIs, guidelines, or URLs. Include at least one HTTPS source per question;\nprefer stable, well-known primary references and flag uncertain citations.
@@ -37,7 +37,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
             "questions": [{
                 "stem": "string", "domain": "string", "topic": "string",
                 "objective": "string", "difficulty": "application or integration",
-                "level": "basic or advanced", "answer": "A, B, or C",
+                "level": "basic or advanced", "answer": "A, B, C, or D",
                 "options": [{"id": "A", "text": "string", "explanation": "string"}],
                 "sources": [{"title": "string", "url": "https://source.example/path"}]
             }]
@@ -77,8 +77,8 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
     for question in questions:
         opts = question.get("options", [])
         if sorted(o.get("id") for o in opts) != ["A", "B", "C"]:
-            raise ValueError("Each question must have A/B/C choices")
-        if question.get("answer") not in ("A", "B", "C"):
+            raise ValueError("Each question must have A/B/C or A/B/C/D choices")
+        if question.get("answer") not in ("A", "B", "C", "D"):
             raise ValueError("Invalid answer key")
         if not all(o.get("explanation") for o in opts):
             raise ValueError("Every option requires an explanation")
