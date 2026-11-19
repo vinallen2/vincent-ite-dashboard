@@ -4,6 +4,7 @@ The API key stays in Railway. Clinical questions require source verification
 and human/independent quality checks before publication.
 """
 import json
+import logging
 import os
 import httpx
 
@@ -78,12 +79,14 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
     }
     rejected_topics = set()
     feedback = ""
+    logger = logging.getLogger("ite.generation")
     async with httpx.AsyncClient(timeout=httpx.Timeout(35.0, connect=10.0)) as client:
         for attempt in range(3):
+            draft = None
             correction = ""
             if attempt:
                 correction = (
-                    "\\nREGENERATE THE ENTIRE THREE-QUESTION SET. "
+                    "\nREGENERATE THE ENTIRE THREE-QUESTION SET. "
                     "The previous draft failed quality controls: " + feedback + ". "
                     "Choose NEW topics and three distinct domains. "
                     "Do not use these rejected topics: "
@@ -95,7 +98,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
             payload = {
                 "model": model or MODEL,
                 "instructions": SYSTEM,
-                "input": "Return only a valid JSON object matching the requested output shape.\\n"
+                "input": "Return only a valid JSON object matching the requested output shape.\n"
                          + prompt + correction,
                 "max_output_tokens": 5000,
                 "text": {"format": {"type": "json_object"}}
@@ -158,7 +161,8 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                 return draft
             except (ValueError, TypeError, KeyError, StudyError) as exc:
                 feedback = str(exc)[:250]
-                if isinstance(draft if "draft" in locals() else None, dict):
+                logger.warning("ITE draft %s/3 rejected: %s", attempt + 1, feedback)
+                if isinstance(draft, dict):
                     rejected_topics.update(
                         str(q.get("topic") or "").strip().casefold()
                         for q in draft.get("questions", []) if isinstance(q, dict)
