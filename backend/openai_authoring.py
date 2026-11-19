@@ -11,7 +11,7 @@ MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-5-mini")
 ENDPOINT = "https://api.openai.com/v1/responses"
 
 SYSTEM = """You are authoring original CA-2 anesthesiology ITE practice material.
-Return JSON only. Begin with a concise teaching review that does not reveal
+Return a valid JSON object only. Begin with a concise teaching review that does not reveal
 answers. Write exactly three clinically realistic, challenging multiple-choice
 questions with one unambiguously correct answer each. Two must test application
 and one integration. Give substantive rationales for all answer choices.
