@@ -31,3 +31,10 @@ exports/
 .DS_Store
 .idea/
 .vscode/
+
+.cloudflare/
+.runtime/
+
+
+.venv-workers/
+python_modules/

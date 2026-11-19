@@ -1,1 +1,1 @@
-"""ITE dashboard Python backend package."""
+"""Private ITE study application."""

@@ -55,3 +55,4 @@ def grade_first_attempt(
 
 def accuracy(correct: int, total: int) -> float | None:
     return round(100 * correct / total, 1) if total else None
+

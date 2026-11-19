@@ -31,3 +31,4 @@ def test_rejects_wrong_question_set():
             {"questionId": "2", "choice": "B"},
             {"questionId": "4", "choice": "B"},
         ], date(2026, 11, 19))
+

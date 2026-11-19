@@ -1,0 +1,14 @@
+{
+  "name": "vincent-ite-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private ITE study UI and Python backend migration",
+  "type": "module",
+  "scripts": {
+    "build:frontend": "node scripts/build_frontend.mjs",
+    "test:gateway": "node scripts/test_gateway.mjs"
+  },
+  "devDependencies": {
+    "cf": "^1.0.0-rc.2"
+  }
+}

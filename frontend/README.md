@@ -1,1 +1,6 @@
-The original website UI must be exported from the existing private ChatGPT Site before it is migrated. Do not recreate it from screenshots or claim this folder is the existing frontend.
+# Recovered frontend
+
+These are the original private Site's actual source files, recovered through
+its authorized Git repository. No UI has been reconstructed from screenshots.
+`scripts/build_frontend.mjs` embeds them in the Sites private gateway build.
+The Python API preserves the response shape they consume.
