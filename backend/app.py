@@ -4,10 +4,12 @@ The existing owner-private Sites gate authenticates the person. This service
 never accepts a user id header as authentication without the shared secret.
 """
 import hmac
+import base64
+from pathlib import Path
 import json
 import os
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 from .service import StudyService, StudyError, WORKFLOW
 from .storage import D1Store
 from .d1_http import D1HTTPStore
@@ -23,12 +25,25 @@ def create_app(store=None, token=None, now=None):
         env = request.scope.get('env')
         expected = token or getattr(env,'GATEWAY_TOKEN','') or os.environ.get('GATEWAY_TOKEN','')
         actual = request.headers.get('x-ite-gateway-token','')
-        if not expected or not hmac.compare_digest(str(expected).encode('utf-8'), actual.encode('utf-8')):
-            return JSONResponse({'error':'Private study backend.'},status_code=401,headers=HEADERS)
+        site_password = os.environ.get('ITE_SITE_PASSWORD', '')
+        authorization = request.headers.get('authorization', '')
+        password_ok = False
+        if site_password and authorization.startswith('Basic '):
+            try:
+                raw = base64.b64decode(authorization[6:], validate=True).decode('utf-8')
+                username, supplied = raw.split(':', 1)
+                password_ok = hmac.compare_digest(username, 'ite') and hmac.compare_digest(supplied, site_password)
+            except (ValueError, UnicodeError):
+                pass
+        gateway_ok = bool(expected) and hmac.compare_digest(str(expected).encode('utf-8'), actual.encode('utf-8'))
+        if not (gateway_ok or password_ok):
+            return Response('Authentication required.',status_code=401,headers={**HEADERS,'www-authenticate':'Basic realm="ITE Study"'})
+        request.state.password_authenticated = password_ok
         if request.method == 'POST':
             origin = request.headers.get('origin')
             allowed = str(getattr(env,'SITE_ORIGIN',None) or os.environ.get('SITE_ORIGIN','https://vincent-ite-study-dashboard.grittypeach1026.chatgpt.site'))
-            if origin and origin != allowed or request.headers.get('sec-fetch-site') == 'cross-site':
+            same_host = f'{request.url.scheme}://{request.headers.get("host", "")}'
+            if (origin and origin not in (allowed, same_host)) or request.headers.get('sec-fetch-site') == 'cross-site':
                 return JSONResponse({'error':'Same-origin request required.'},status_code=403,headers=HEADERS)
         if store is not None:
             db = store
@@ -50,6 +65,18 @@ def create_app(store=None, token=None, now=None):
     @app.exception_handler(StudyError)
     async def study_error(request, error):
         return JSONResponse({'error':str(error)},status_code=error.status,headers=HEADERS)
+
+    @app.get('/')
+    async def homepage():
+        template = (Path(__file__).resolve().parent.parent / 'frontend' / 'study.html').read_text()
+        template = template.replace('<script>/*STUDY_SCRIPT*/</script>', '<script type="module">import {studyClient} from "/study-client.mjs"; studyClient();</script>')
+        template = template.replace('Private · Owner only', 'Password protected')
+        return HTMLResponse(template,headers=HEADERS)
+
+    @app.get('/study-client.mjs')
+    async def client_script():
+        script = (Path(__file__).resolve().parent.parent / 'frontend' / 'study-client.mjs').read_text()
+        return Response(script,media_type='text/javascript',headers=HEADERS)
 
     @app.get('/api/workflow')
     async def workflow(): return WORKFLOW
@@ -94,12 +121,14 @@ def create_app(store=None, token=None, now=None):
 
     @app.post('/api/submit')
     async def submit(request:Request):
-        if not request.headers.get('oai-authenticated-user-id'):
+        if not (request.state.password_authenticated or request.headers.get('oai-authenticated-user-id')):
             raise StudyError('Sign in to submit your answers.',401)
         return await request.state.study.save_answers(await body(request))
 
     @app.post('/api/agent')
     async def agent(request:Request):
+        if request.state.password_authenticated:
+            raise StudyError('Publishing is reserved for the trusted gateway.',403)
         p = await body(request)
         return await request.state.study.action(p.get('action'),p.get('payload'))
 
