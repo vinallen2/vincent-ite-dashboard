@@ -185,7 +185,15 @@ def create_app(store=None, token=None, now=None):
             if existing:
                 return {'status':'exists','sessionId':session_id}
         context = await build_authoring_context(request.state.study.db,today=today,kind=kind)
-        draft = await draft_session(context,kind=kind)
+        try:
+            draft = await draft_session(context,kind=kind)
+        except ValueError as exc:
+            log.warning('Bonus/daily generation could not meet question quality checks: %s', exc)
+            raise StudyError(
+                'OpenAI could not produce three sufficiently different valid questions '
+                'after three automatic attempts. No session was saved. Please try again.',
+                422
+            ) from exc
         session = prepare_session(draft,today=today,kind=kind)
         session['id'] = session_id
         saved = await request.state.study.publish(session)
