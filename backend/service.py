@@ -41,7 +41,13 @@ def validate_session(p):
     if not isinstance(p, dict) or not valid_date(p.get('date')):
         raise StudyError('A valid session date is required.')
     expected = 'CA2-Bonus ' if p.get('kind') == 'bonus' or str(p.get('id', '')).startswith('CA2-Bonus ') else 'CA2-New '
-    if (not (p.get('id') == expected + p['date'] or (expected == 'CA2-Bonus ' and __import__('re').fullmatch(r'CA2-Bonus '+p['date']+r' #[2-9][0-9]*',p.get('id','')))) or p.get('kind', 'bonus' if expected == 'CA2-Bonus ' else 'daily') != ('bonus' if expected == 'CA2-Bonus ' else 'daily'):
+    session_id = p.get('id', '')
+    valid_id = session_id == expected + p['date']
+    if expected == 'CA2-Bonus ' and not valid_id:
+        import re
+        valid_id = bool(re.fullmatch(r'CA2-Bonus ' + p['date'] + r' #[2-9][0-9]*', session_id))
+    expected_kind = 'bonus' if expected == 'CA2-Bonus ' else 'daily'
+    if not valid_id or p.get('kind', expected_kind) != expected_kind:
         raise StudyError('Session id, kind, and date must match.')
     if not text(p.get('title'), 160) or not isinstance(p.get('questions'), list) or len(p['questions']) != 3:
         raise StudyError('A session requires a title and exactly three questions.')
