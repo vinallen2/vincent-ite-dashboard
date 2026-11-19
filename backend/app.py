@@ -8,6 +8,10 @@ import base64
 from pathlib import Path
 import json
 import os
+import asyncio
+import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from .service import StudyService, StudyError, WORKFLOW
@@ -19,6 +23,48 @@ HEADERS = {'cache-control':'private, no-store, max-age=0','x-content-type-option
 
 def create_app(store=None, token=None, now=None):
     app = FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
+    log = logging.getLogger('ite.generation')
+
+    async def publish_daily_if_missing():
+        if os.environ.get('ITE_ENABLE_GENERATION') != 'true':
+            return
+        from .authoring_context import build_authoring_context, prepare_session
+        from .openai_authoring import draft_session
+        today = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+        db = store or D1HTTPStore(os.environ.get('CLOUDFLARE_ACCOUNT_ID'), os.environ.get('CLOUDFLARE_D1_DATABASE_ID'), os.environ.get('CLOUDFLARE_API_TOKEN'))
+        session_id = 'CA2-New ' + today
+        if await db.one('SELECT id FROM study_sessions WHERE id=?',session_id):
+            return
+        context = await build_authoring_context(db,today=today,kind='daily')
+        draft = await draft_session(context,kind='daily')
+        payload = prepare_session(draft,today=today,kind='daily')
+        saved = await StudyService(db,now).publish(payload)
+        log.warning('Daily ITE OpenAI generation published: %s, created=%s',session_id,saved['created'])
+
+    async def generation_loop():
+        while True:
+            try:
+                local = datetime.now(ZoneInfo('America/New_York'))
+                if local.hour >= 6:
+                    await publish_daily_if_missing()
+            except Exception:
+                log.exception('Daily ITE OpenAI generation failed')
+            await asyncio.sleep(3600)
+
+    @app.on_event('startup')
+    async def start_generation():
+        if os.environ.get('ITE_ENABLE_GENERATION') == 'true':
+            app.state.generation_task = asyncio.create_task(generation_loop())
+
+    @app.on_event('shutdown')
+    async def stop_generation():
+        task = getattr(app.state,'generation_task',None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     @app.middleware('http')
     async def private_gateway(request, call_next):
