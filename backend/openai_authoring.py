@@ -16,7 +16,7 @@ answers. Write exactly three clinically realistic, challenging multiple-choice
 questions with one unambiguously correct answer each. Two must test application
 and one integration. Give substantive rationales for all answer choices.
 Avoid repeated objectives supplied in context. Do not invent article citations,
-DOIs, guidelines, or URLs. Source verification is a separate mandatory step.
+DOIs, guidelines, or URLs. Include at least one HTTPS source per question;\nprefer stable, well-known primary references and flag uncertain citations.
 These are educational practice questions, not official ABA items."""
 
 async def draft_session(context: dict, *, kind: str = "daily", model: str | None = None) -> dict:
@@ -33,12 +33,13 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
         "output_shape": {
             "title": "string",
             "teaching": "string",
+            "review": [],
             "questions": [{
                 "stem": "string", "domain": "string", "topic": "string",
                 "objective": "string", "difficulty": "application or integration",
                 "level": "basic or advanced", "answer": "A, B, or C",
                 "options": [{"id": "A", "text": "string", "explanation": "string"}],
-                "sources": [{"title": "string", "url": "string"}]
+                "sources": [{"title": "string", "url": "https://source.example/path"}]
             }]
         }
     }, ensure_ascii=False)
