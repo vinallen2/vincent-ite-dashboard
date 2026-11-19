@@ -6,6 +6,19 @@ export function studyClient(){
  document.querySelectorAll('a[data-view]').forEach(a=>a.onclick=()=>selectView(a.dataset.view));
  const active=()=>data.sessions.find(s=>s.id===selectedId)||data.sessions.find(s=>s.date===data.today&&s.kind!=='bonus');
  function openSession(id){if(active()&&!active().attempt&&document.querySelector('input[type=radio]:checked')){const msg=document.createElement('p');msg.className='error';msg.textContent='Submit your current answers before opening another session.';$('sessionArea').prepend(msg);return;}selectedId=id;view='today';render();window.scrollTo({top:0,behavior:'smooth'});}
+ function analyze(performance){
+  const rows=performance?.tabs?.Sessions?.slice(1)||[];
+  const verified=rows.filter(r=>r[2]==='Verified');
+  const total=verified.reduce((n,r)=>n+(Number(r[3])||0),0);
+  const correct=verified.reduce((n,r)=>n+(Number(r[4])||0),0);
+  const days=[...new Set(verified.filter(r=>r[5]==='Yes').map(r=>r[0]).filter(Boolean))].sort();
+  const daySet=new Set(days);
+  let current=0;
+  const cursor=new Date((data?.today||new Date().toISOString().slice(0,10))+'T12:00:00Z');
+  if(!daySet.has(cursor.toISOString().slice(0,10)))cursor.setUTCDate(cursor.getUTCDate()-1);
+  while(daySet.has(cursor.toISOString().slice(0,10))){current++;cursor.setUTCDate(cursor.getUTCDate()-1);}
+  return {total,correct,days,current};
+ }
  function render(){
   const m=analyze(data.performance),session=active(),done=m.days.includes(data.today),bonus=data.sessions.find(s=>s.kind==='bonus'&&s.date===data.today)||data.sessions.find(s=>s.kind==='bonus'&&!s.attempt&&s.date<data.today);
   const stat=(a,b,c)=>'<div class="stat"><span>'+a+'</span><b>'+b+'</b><small>'+c+'</small></div>';
