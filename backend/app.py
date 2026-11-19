@@ -42,8 +42,11 @@ def create_app(store=None, token=None, now=None):
         if request.method == 'POST':
             origin = request.headers.get('origin')
             allowed = str(getattr(env,'SITE_ORIGIN',None) or os.environ.get('SITE_ORIGIN','https://vincent-ite-study-dashboard.grittypeach1026.chatgpt.site'))
-            same_host = f'{request.url.scheme}://{request.headers.get("host", "")}'
-            if (origin and origin not in (allowed, same_host)) or request.headers.get('sec-fetch-site') == 'cross-site':
+            # Railway terminates HTTPS at its reverse proxy; request.url.scheme may be http.
+            # Compare the browser Origin to the public Host using HTTPS instead.
+            host = request.headers.get('host', '')
+            public_origin = f'https://{host}' if host else ''
+            if (origin and origin not in (allowed, public_origin)) or request.headers.get('sec-fetch-site') == 'cross-site':
                 return JSONResponse({'error':'Same-origin request required.'},status_code=403,headers=HEADERS)
         if store is not None:
             db = store
