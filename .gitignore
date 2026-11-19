@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+
+# Frontend
+node_modules/
+dist/
+build/
+
+# Local databases and exports
+*.sqlite
+*.sqlite3
+*.db
+backups/
+exports/
+
+# System
+.DS_Store
+.idea/
+.vscode/
