@@ -108,7 +108,16 @@ def same_concept(a, b):
     return SequenceMatcher(None, a, b).ratio() >= .83
 
 
+# Approximately balance the two halves of the published ABA ITE blueprint
+# over successive short sessions (rather than forcing arbitrary difficulty).
+BASIC_DOMAINS = {
+    "Airway", "Respiratory", "Pharmacology", "Regional",
+    "Equipment", "Physiology", "Statistics",
+}
+
+
 def make_question_plan(context):
+    """Choose ITE blueprint topics in Python before the OpenAI call."""
     today = date.fromisoformat(context["date"])
     history = list(context.get("prior_objectives", []))
     history += list(context.get("historical_question_log", []))
@@ -120,30 +129,65 @@ def make_question_plan(context):
             continue
         if 0 <= age < 14 and row.get("topic"):
             recent.append(row["topic"])
+
     candidates = [
         (domain, topic) for domain, topic in BLUEPRINT
         if not any(same_concept(topic, old) for old in recent)
     ]
-    if not candidates:
-        raise ValueError("No fresh ITE concepts remain after the 14-day cooldown")
-    domains = list(dict.fromkeys(domain for domain, _ in BLUEPRINT))
+    if len({d for d, _ in candidates}) < 3:
+        raise ValueError("Insufficient fresh ITE domains after the 14-day cooldown")
+
     today_count = sum(1 for item in context.get("prior_objectives", [])
                       if item.get("date") == context["date"]) // 3
-    rotation = (today.toordinal() + today_count * 3) % len(domains)
-    rotated_domains = domains[rotation:] + domains[:rotation]
+    domains = list(dict.fromkeys(domain for domain, _ in BLUEPRINT))
+    start = (today.toordinal() + today_count * 3) % len(domains)
+    rotation = domains[start:] + domains[:start]
+    basic_goal = 2 if (today.toordinal() + today_count) % 2 else 1
+
     selected = []
-    # Fairly rotate high-yield domains while prioritizing long-unseen topics.
-    for domain in rotated_domains:
-        eligible = [t for d, t in candidates if d == domain]
-        if not eligible:
+    used = set()
+    # Actual scored retrieval, when it is eligible after the cooldown.
+    for row in context.get("due_reviews", []):
+        if not row.get("scored_eligible"):
             continue
-        seen = lambda topic: sum(same_concept(topic, row.get("topic")) for row in history)
-        eligible.sort(key=lambda t: (seen(t), (today.toordinal() + len(t)) % 71, t))
-        selected.append({"domain": domain, "topic": eligible[0], "mode": "new_application"})
-        if len(selected) == 3:
+        match = next(((d, t) for d, t in candidates
+                      if same_concept(t, row.get("topic"))), None)
+        if match:
+            d, topic = match
+            selected.append({"domain": d, "topic": topic, "mode": "spaced_application"})
+            used.add(d)
             break
+
+    def topic_score(topic):
+        return (
+            sum(same_concept(topic, row.get("topic")) for row in history),
+            (today.toordinal() + len(topic)) % 71,
+            topic
+        )
+
+    # Rotate categories while maintaining ~50/50 basic versus advanced coverage.
+    for pass_number in range(2):
+        for domain in rotation:
+            if len(selected) == 3:
+                break
+            if domain in used:
+                continue
+            basic = domain in BASIC_DOMAINS
+            basic_count = sum(x["domain"] in BASIC_DOMAINS for x in selected)
+            if pass_number == 0 and (basic and basic_count >= basic_goal
+                                      or not basic and len(selected) - basic_count >= 3 - basic_goal):
+                continue
+            eligible = sorted((t for d, t in candidates if d == domain), key=topic_score)
+            if eligible:
+                selected.append({
+                    "domain": domain, "topic": eligible[0], "mode": "new_application"
+                })
+                used.add(domain)
     if len(selected) != 3:
         raise ValueError("Insufficient distinct anesthesia domains after cooldown")
+    for index, item in enumerate(selected):
+        item["level"] = "basic" if item["domain"] in BASIC_DOMAINS else "advanced"
+        item["difficulty"] = "integration" if index == 2 else "application"
     return selected
 
 
