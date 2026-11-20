@@ -114,6 +114,7 @@ def prepare_session(draft: dict, *, today: str, kind: str = "daily") -> dict:
     questions = []
     for i, question in enumerate(draft.get("questions", []), 1):
         q = dict(question)
+        q.pop("sources", None)  # Do not publish AI-generated question references.
         q["id"] = str(i)
         questions.append(q)
     payload = {
