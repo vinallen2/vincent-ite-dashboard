@@ -62,7 +62,7 @@ def parse_articles(xml):
         pubdate = article.find("./Journal/JournalIssue/PubDate")
         year = (pubdate.findtext("Year") if pubdate is not None else "") or ""
         if not year and pubdate is not None:
-            match = re.search(r"(19|20)\\d{2}", clean_text(pubdate))
+            match = re.search(r"(19|20)\d{2}", clean_text(pubdate))
             year = match.group() if match else ""
         authors = []
         for author in article.findall("./AuthorList/Author")[:3]:
@@ -70,7 +70,7 @@ def parse_articles(xml):
             initials = author.findtext("Initials") or ""
             if last:
                 authors.append((initials + " " + last).strip())
-        if pmid and title and journal and abstract and 2015 <= int(year or 0) <= 2026:
+        if pmid and title and journal and abstract and 2015 <= int(year or 0) <= __import__("datetime").date.today().year:
             out.append({
                 "pmid": pmid, "title": title, "journal": journal,
                 "year": year, "authors": ", ".join(authors) + (" et al." if len(authors) >= 3 else ""),
@@ -104,7 +104,7 @@ async def pubmed_candidates(client, *, date_string, existing):
         from datetime import date
         bucket = date.fromisoformat(date_string).toordinal() % len(SEARCHES)
         search = await client.get(EUTILS + "esearch.fcgi", params={
-            "db": "pubmed", "term": SEARCHES[bucket], "retmax": 18,
+            "db": "pubmed", "term": SEARCHES[bucket].replace("2026[dp]", f"{date.fromisoformat(date_string).year}[dp]"), "retmax": 18,
             "retmode": "json", "sort": "relevance",
         })
         search.raise_for_status()
@@ -117,7 +117,7 @@ async def pubmed_candidates(client, *, date_string, existing):
 
 async def prepare_daily_article(db, *, today):
     """Choose real PubMed metadata and have OpenAI produce a grounded reading note."""
-    existing = await db.all("SELECT title,doi,url,date FROM study_articles ORDER BY date DESC LIMIT 500")
+    existing = await db.all("SELECT title,doi,url,date,topic FROM study_articles ORDER BY date DESC LIMIT 500")
     async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0),
                                  headers={"User-Agent": "AnesthesiaITEStudy/1.0 (educational)"}) as client:
         options = await pubmed_candidates(client, date_string=today, existing=existing)
@@ -133,7 +133,10 @@ async def prepare_daily_article(db, *, today):
     ]
     prompt = json.dumps({
         "task": "Select ONE high-impact must-read anesthesia article from verified PubMed candidates and write a concise evidence-grounded reading note.",
-        "criteria": "Prioritize widely relevant practice-changing guidelines, seminal trials, and strong evidence. Rotate subspecialties. Avoid selecting superseded guidelines when a newer edition appears. Do not invent numerical results or recommendations not in the supplied abstracts.",
+        "criteria": "Prioritize widely relevant practice-changing guidelines, seminal trials, and strong evidence. Rotate subspecialties and avoid the last 3 articles' clinical topics. Avoid selecting superseded guidelines when a newer edition appears. Do not invent numerical results or recommendations not in the supplied abstracts.",
+        "recently_read_articles": [
+            {"title": a["title"], "topic": a.get("topic")} for a in existing[:10]
+        ],
         "candidates": evidence,
         "output": {"pmid": "copy one candidate PMID", "topic": "short clinical subject",
                    "takeaway": "3-4 sentences: why every anesthesiologist should read it, high-yield message and one limitation. Acknowledge if full text was not assessed."}
@@ -141,7 +144,7 @@ async def prepare_daily_article(db, *, today):
     payload = {
         "model": MODEL,
         "instructions": "You are an anesthesiology journal club editor. Return only a JSON object. Choose one provided PMID; do not invent literature, DOI, links, authors or results. Base the takeaway strictly on the supplied PubMed abstract and label it as abstract-based.",
-        "input": "Return a JSON object only.\\n" + prompt,
+        "input": "Return a JSON object only.\n" + prompt,
         "max_output_tokens": 650,
         "text": {"format": {"type": "json_object"}}
     }
