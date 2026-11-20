@@ -41,6 +41,19 @@ def create_app(store=None, token=None, now=None):
         saved = await StudyService(db,now).publish(payload)
         log.warning('Daily ITE OpenAI generation published: %s, created=%s',session_id,saved['created'])
 
+    async def publish_daily_article_if_missing():
+        """Store one source-verified high-yield reading from PubMed each day."""
+        if os.environ.get('ITE_ENABLE_GENERATION') != 'true':
+            return
+        from .article_authoring import prepare_daily_article
+        today = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+        db = store or D1HTTPStore(os.environ.get('CLOUDFLARE_ACCOUNT_ID'), os.environ.get('CLOUDFLARE_D1_DATABASE_ID'), os.environ.get('CLOUDFLARE_API_TOKEN'))
+        if await db.one('SELECT id FROM study_articles WHERE date=? LIMIT 1', today):
+            return
+        article = await prepare_daily_article(db, today=today)
+        result = await StudyService(db, now).record_article(article)
+        log.warning('Daily PubMed-verified ITE article saved: date=%s, duplicate=%s', today, result.get('duplicate'))
+
     async def generation_loop():
         # One scheduled attempt per calendar day at 6 AM America/New_York.
         # On startup after 6 AM, perform one catch-up attempt if today's session is missing.
@@ -54,6 +67,10 @@ def create_app(store=None, token=None, now=None):
                     await publish_daily_if_missing()
                 except Exception:
                     log.exception('Daily ITE OpenAI generation failed; no automatic retry today')
+                try:
+                    await publish_daily_article_if_missing()
+                except Exception:
+                    log.exception('Daily must-read article selection failed; no automatic retry today')
             local = datetime.now(ZoneInfo('America/New_York'))
             next_run = local.replace(hour=6,minute=0,second=0,microsecond=0)
             if next_run <= local:
