@@ -46,6 +46,17 @@ def plan_spaced_repetition(attempt_results, review_rows, *, today, used_today=()
     active_topics = []
     for values in encountered.values():
         values.sort(key=lambda r: r["date"])
+        # Multiple bonus attempts on one day count as one retrieval interval.
+        # Conservatively count a date as missed if any answer was wrong/uncertain.
+        per_day = {}
+        for item in values:
+            current = per_day.get(item["date"])
+            if current is None or (
+                current["correct"] and current["confidence"] not in ("unsure", "guessed", "low")
+                and (not item["correct"] or item["confidence"] in ("unsure", "guessed", "low"))
+            ):
+                per_day[item["date"]] = item
+        values = list(per_day.values())
         latest = values[-1]
         # A correct but uncertain answer is not a successful retrieval.
         streak = 0
