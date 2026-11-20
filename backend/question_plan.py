@@ -145,7 +145,7 @@ def make_question_plan(context):
 def stem_is_repeated(stem, previous_stems):
     """Catch lightly reworded or re-numbered stems, beyond exact topic matching."""
     def without_numbers(text):
-        return re.sub(r"\\b\\d+(?:\\.\\d+)?\\b", "#", normalized(text))
+        return re.sub(r"\b\d+(?:\.\d+)?\b", "#", normalized(text))
     stem = without_numbers(stem)
     return any(
         SequenceMatcher(None, stem, without_numbers(past)).ratio() >= .76
