@@ -64,9 +64,6 @@ def validate_session(p):
                 raise StudyError('Each option requires text and an explanation.')
         if q.get('answer') not in [o['id'] for o in options]:
             raise StudyError('Answer must be a published option.')
-        sources = q.get('sources')
-        if not isinstance(sources, list) or not sources or any(not text(s.get('title'),300) or not str(s.get('url','')).startswith('https://') for s in sources):
-            raise StudyError('Each question requires verified HTTPS sources.')
     review = p.get('review')
     if not isinstance(review, list) or len(review) > 3 or any(any(not text(r.get(k),n) for k,n in [('topic',300),('prompt',2000),('explanation',6000)]) for r in review):
         raise StudyError('Review requires at most three topic, prompt, explanation records.')
