@@ -8,37 +8,36 @@ import logging
 import os
 import httpx
 
-MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-4.1-mini")
+MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-4.1")
 ENDPOINT = "https://api.openai.com/v1/responses"
 
-SYSTEM = """You are authoring original CA-2 anesthesiology ITE practice material.
-Return a valid JSON object only. Begin with a concise, high-yield teaching review
-that reinforces foundational physiology, pharmacology, or clinical reasoning without
-revealing the answers. Write exactly THREE original clinical multiple-choice questions
-for a CA-2 resident preparing for the ABA In-Training Examination (ITE).
-Each question must have FOUR plausible answer choices labeled A, B, C, D and exactly
-ONE best answer. Emphasize concepts anesthesiology residents are expected to know,
-including mechanisms, clinical judgment, physiology, drugs, equipment and complications.
-Two questions should test application; one should test integration of two or more ideas.
-Make the difficulty appropriate for the CA-2 ITE: challenging but fair, not obscure
-subspecialty trivia. Use precise, internally consistent patient details and numbers.
-Avoid ambiguous stems, distractors that are obviously absurd, and accidental clues.
-Every option needs a concise, physiologically sound explanation explaining why it is
-correct or incorrect. These are original practice questions, not official ABA items.
-IMPORTANT: The question topics and domains are ASSIGNED by the application. You must write
-Question 1, Question 2 and Question 3 in exactly the order of assigned_questions. Copy
-each assigned domain and topic string VERBATIM into that question's domain and topic
-fields. You MAY NOT substitute a topic from recent history or change an assigned topic.
-No recycled question stems, only changing the patient's age, numeric values or vignette
-while preserving the same reasoning step. Use distinct clinical settings and test a new
-decision or inference in each question. Realistic high-yield CA-2 / February 2027 ITE
-difficulty, one unambiguous key, four plausible choices (A through D), no tricks or
-misleading clues. The pre-question teaching should explain core principles, but not
-reveal the keyed answers or rehearse an identical numerical problem. Include one short
-spaced-recall concept in that teaching when due_reviews is non-empty, without turning
-a concept tested in the last 14 days into another scored question. Treat due_reviews
-as TEACHING / RETENTION material, NOT a directive to replace assigned questions.
-Do not add fields outside the requested output shape."""
+SYSTEM = """Write ORIGINAL practice questions modeled on the American Board of
+Anesthesiology In-Training Examination (ITE), appropriate for a CA-2 resident.
+These are not official ABA or TrueLearn questions.
+
+Apply the supplied three topic assignments EXACTLY in order, including domain,
+topic, difficulty and basic/advanced level. Do not independently choose topics.
+
+Use the published ABA ITE format: single-best-answer A-type questions, usually
+a concise clinical vignette or physiologic scenario followed by one clear lead-in
+and exactly THREE responses (A, B, C). Questions test application of knowledge,
+not obscure trivia or forced difficulty. Reflect both basic sciences and advanced
+clinical anesthesia; the assignments already balance that over days.
+
+Make distractors plausible to a trained anesthesiology resident and mutually
+exclusive. Verify numerical calculations, normal ranges, pharmacology,
+physiology, and internal consistency before writing the answer key. There must
+be one defensible best answer with no hidden assumptions. No copy/paste or
+cosmetic rewrites of previous question stems. Explain why the correct answer
+is best and WHY each distractor is incorrect. Keep rationales concise and
+educational; never add references or citations.
+
+Start with an efficient high-yield teaching review covering the THREE assigned
+objectives before the questions, without giving away a specific answer. If a
+separate due_recall topic is supplied, add a brief retrieval-review paragraph
+without repeating an old scored question. Teaching is not part of the score.
+Write exactly three items: two application and one integration as assigned.
+Return ONLY the requested JSON object."""
 
 async def draft_session(context: dict, *, kind: str = "daily", model: str | None = None) -> dict:
     """Draft only; caller must validate and verify before persisting."""
@@ -49,31 +48,42 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
         raise RuntimeError("OPENAI_API_KEY is missing")
     from .question_plan import make_question_plan, normalized, stem_is_repeated
     assigned_questions = make_question_plan(context)
+    from datetime import date
+    from .question_plan import same_concept
+
+    due = [row for row in context.get("due_reviews", [])
+           if not any(same_concept(row["topic"], item["topic"])
+                      for item in assigned_questions)]
+    # Rotate the overdue pool so the same missed item is not lectured on daily.
+    if due:
+        shift = date.fromisoformat(context["date"]).toordinal() % len(due)
+        due = (due[shift:] + due[:shift])[:2]
+    due_recall = [
+        {"topic": x["topic"], "reason": x["reason"]}
+        for x in due
+    ]
     prompt = json.dumps({
-        "task": "Prepare a review-first CA-2 ITE session",
-        "kind": kind,
+        "task": "CA-2 ABA ITE practice: teaching first, then three exam-style questions",
         "assigned_questions": assigned_questions,
-        "performance_and_previous_objectives": context,
-        "selection_requirements": {
-            "count": 3,
-            "unique_anesthesia_domains": 3,
-            "last_14_days_topic_repetition": "forbidden for scored questions",
-            "due_for_spaced_review": "review briefly in teaching, not by recycling a scored stem",
-            "other_questions": "only the three assigned topics, each in the specified domain",
-            "prior_stem_reuse": "forbidden"
-        },
+        "due_recall": due_recall,
         "output_shape": {
-            "title": "string",
-            "teaching": "string",
+            "title": "brief session title",
+            "teaching": "concise pre-question review of assigned concepts and due recall",
             "review": [],
             "questions": [{
-                "stem": "string", "domain": "string", "topic": "string",
-                "objective": "string", "difficulty": "application or integration",
-                "level": "basic or advanced", "answer": "A, B, C, or D",
-                "options": [{"id": "A", "text": "string", "explanation": "string"}, {"id": "B", "text": "string", "explanation": "string"}, {"id": "C", "text": "string", "explanation": "string"}, {"id": "D", "text": "string", "explanation": "string"}]
+                "stem": "single-best-answer item", "domain": "exact assigned domain",
+                "topic": "exact assigned topic", "objective": "specific tested skill",
+                "difficulty": "exact assigned difficulty", "level": "exact assigned level",
+                "answer": "A/B/C",
+                "options": [
+                    {"id": "A", "text": "plausible answer", "explanation": "why right or wrong"},
+                    {"id": "B", "text": "plausible answer", "explanation": "why right or wrong"},
+                    {"id": "C", "text": "plausible answer", "explanation": "why right or wrong"}
+                ]
             }]
         }
     }, ensure_ascii=False)
+
     # The model can produce a clinically plausible draft that duplicates a topic.
     # Correct it automatically instead of surfacing a server error to the learner.
     from .authoring_context import prepare_session
@@ -103,7 +113,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                     + json.dumps(sorted(rejected_topics), ensure_ascii=False) + ". "
                     "Follow assigned_questions exactly; copy topics and domains verbatim. "
                     "Avoid all topics tested in the previous 14 days. "
-                    "Use four complete A/B/C/D options per question, "
+                    "Use exactly three complete A/B/C options per question, "
                     "each with a concise rationale and one unambiguous best answer."
                 )
             payload = {
@@ -152,11 +162,15 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                         raise ValueError(f"Question {index+1} must use domain {focus['domain']}")
                     if normalized(question.get("topic")) != normalized(focus["topic"]):
                         raise ValueError(f"Question {index+1} must use exact topic {focus['topic']}")
+                    if question.get("difficulty") != focus["difficulty"]:
+                        raise ValueError("Incorrect application/integration assignment")
+                    if question.get("level") != focus["level"]:
+                        raise ValueError("Incorrect basic/advanced assignment")
                     if stem_is_repeated(question.get("stem", ""), context.get("previous_stems", [])):
                         raise ValueError("Rephrased or recycled question stem")
                     opts = question.get("options", [])
-                    if sorted(o.get("id") for o in opts) != ["A", "B", "C", "D"]:
-                        raise ValueError("Each question needs four A/B/C/D options")
+                    if sorted(o.get("id") for o in opts) != ["A", "B", "C"]:
+                        raise ValueError("Each question needs three A/B/C options")
                     if question.get("answer") not in {o["id"] for o in opts}:
                         raise ValueError("Invalid answer key")
                     if not all(o.get("explanation") for o in opts):
