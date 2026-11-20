@@ -37,6 +37,7 @@ async def build_authoring_context(db, *, today: str, kind: str = "daily") -> dic
     today_objectives = set()
     recent_topics = []
     prior = []
+    previous_stems = []
     for row in sessions:
         p = json.loads(row["payload"])
         for q in p.get("questions", []):
@@ -44,6 +45,12 @@ async def build_authoring_context(db, *, today: str, kind: str = "daily") -> dic
             objective = (q.get("objective") or "").strip()
             prior.append({"date": row["date"], "domain": q.get("domain"),
                           "topic": topic, "objective": objective})
+            try:
+                age = (date.fromisoformat(today) - date.fromisoformat(row["date"])).days
+            except (ValueError, TypeError):
+                age = 1000
+            if 0 <= age < 30 and q.get("stem"):
+                previous_stems.append(q["stem"])
             if row["date"] == today:
                 if topic:
                     today_topics.add(topic.casefold())
@@ -86,6 +93,7 @@ async def build_authoring_context(db, *, today: str, kind: str = "daily") -> dic
         "recent_attempts": recent,
         "historical_question_log": historical_questions[-60:],
         "prior_objectives": prior[:360],
+        "previous_stems": previous_stems[:90],
         "recently_used_topics": recent_topics,
         "already_tested_today": {
             "topics": sorted(today_topics),
