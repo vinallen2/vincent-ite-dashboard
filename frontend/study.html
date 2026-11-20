@@ -4,4 +4,45 @@
 
 /* Daily consistency design: motivation without inventing scores */
 :root{--green:#22694b;--paper:#f3f5ef}body{background:radial-gradient(ellipse at 83% 0%,#e7f0df 0%,transparent 37%),var(--paper)}.hero{background:#163d30;color:#f7f8ee;border-radius:20px;padding:30px 34px;box-shadow:0 15px 38px rgba(20,52,36,.12)}.hero h1{font-size:clamp(33px,4vw,54px);font-weight:650}.hero h1 em{color:#bfe59c}.hero p,.hero .kicker{color:#c6d9c8}.hero .btn.secondary{border-color:#b4d6ae;color:#f1f9ed}.stat{border-radius:15px;box-shadow:0 3px 16px rgba(20,52,36,.035)}.stat b{font-weight:650}.card{border-radius:15px}.btn{border-radius:11px;font-weight:650}.option{border-radius:11px;transition:border-color .15s,background .15s,transform .15s}.option:hover{border-color:#80ad8a;transform:translateY(-1px)}.option:has(input:checked){box-shadow:inset 0 0 0 1px var(--green)}.mission{border-radius:16px;background:white;border:1px solid var(--line);padding:22px;margin-bottom:20px}.mission-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.mission h2{font-size:18px;margin:0}.mission p{font-size:12px;color:var(--muted);margin:8px 0 15px}.mission-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:14px 0}.mission-progress span{height:10px;border-radius:20px;background:#e5eae1}.mission-progress span.done{background:#4d9969}.week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.week-day{text-align:center;border:1px solid #e2e9de;border-radius:9px;padding:9px 2px;font-size:10px;color:#738276}.week-day b{display:block;font-size:14px;color:#2c4c37}.week-day.done{background:#e2f2df;border-color:#91c497}.week-day.today{outline:2px solid #356d4e;outline-offset:1px}.milestones{display:flex;flex-wrap:wrap;gap:7px;margin-top:15px}.milestone{font-size:11px;padding:7px 10px;border:1px solid #d6e3d3;border-radius:20px;color:#617267}.milestone.earned{background:#e3f3d9;color:#245e3d;border-color:#b4d7a6}.completion{background:#e2f3db;border:1px solid #b4d7a6;border-radius:12px;padding:15px;margin-bottom:18px}.completion strong{display:block;font-size:16px}.completion small{color:#46694d}@media(max-width:500px){.hero{padding:24px 20px;border-radius:16px}.mission{padding:16px}.week-day{font-size:9px;padding:8px 1px}.week-day b{font-size:12px}}
+
+
+/* Study momentum: visible progress, small earned rewards, no artificial points. */
+.hero{isolation:isolate;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;z-index:-1;right:-70px;top:-118px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(191,229,156,.17),transparent 68%);pointer-events:none}
+.btn{transition:transform .18s,box-shadow .18s,background-color .18s}
+.btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(20,70,42,.14)}
+.btn:focus-visible,.option:focus-within{outline:3px solid #92c9a0;outline-offset:3px}
+.mission{background:linear-gradient(118deg,#fff 50%,#f3faee);box-shadow:0 8px 26px rgba(20,52,36,.045)}
+.mission-topline{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.mission-lead{flex:1;min-width:0}
+.mission-main{display:flex;align-items:center;gap:16px}
+.mission-ring{--fill:0%;width:76px;height:76px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) var(--fill),#e3ecdf 0);transition:background .2s}
+.mission-ring-inner{width:62px;height:62px;border-radius:50%;background:white;display:grid;place-content:center;text-align:center;box-shadow:0 2px 8px rgba(26,54,40,.07)}
+.mission-ring-inner strong{font-size:21px;line-height:1.1;color:var(--ink);letter-spacing:-.6px}
+.mission-ring-inner small{font-size:9px;color:var(--muted)}
+.mission-progress span{transition:background-color .22s,transform .22s}
+.mission-progress span.done{transform:scaleY(1.08)}
+.momentum-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px}
+.momentum-next{font-size:11px;color:#4a7153;font-weight:600}
+.momentum-next strong{color:#1f6040}
+.milestones{margin:0;gap:6px}
+.milestone{transition:background-color .2s,border-color .2s}
+.answer-tracker{margin:15px 0 10px;padding:13px 15px;border-radius:11px;border:1px solid #d6e7d3;background:#f6fbf3}
+.answer-tracker-heading{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:11px;font-weight:600}
+.answer-tracker-heading span:last-child{font-weight:450;color:var(--muted)}
+.answer-track{height:7px;border-radius:12px;background:#e0ebe0;overflow:hidden;margin-top:11px}
+.answer-track span{display:block;width:0;height:100%;border-radius:12px;background:linear-gradient(90deg,#327655,#82bd6d);transition:width .2s ease-out}
+.article-peek{border-color:#c5ddbd;background:#f7fbf4}
+.article-peek .kicker{color:#368153}
+.article-peek h3{line-height:1.4}
+.article-peek .row-link{font-weight:650}
+.completion{background:linear-gradient(110deg,#ddf2dc,#f4fbeb);padding:17px 19px;box-shadow:0 6px 22px rgba(33,89,43,.05)}
+.completion strong{font-size:17px}
+.completion .completion-detail{font-size:12px;color:#41684d;margin-top:5px}
+.study-toast{position:fixed;z-index:30;right:22px;bottom:20px;max-width:min(360px,calc(100vw - 30px));border-radius:15px;background:#183d2d;color:#effaeb;padding:16px 19px;box-shadow:0 12px 38px rgba(14,49,26,.23);animation:toast-entry .35s ease-out}
+.study-toast strong{display:block;font-size:15px}.study-toast span{display:block;font-size:12px;color:#c8e1c7;margin-top:4px}
+@keyframes toast-entry{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:600px){.mission-ring{width:66px;height:66px}.mission-ring-inner{width:53px;height:53px}.mission-ring-inner strong{font-size:18px}.mission-topline{align-items:flex-start}.mission-main{gap:10px}.milestones{margin-top:5px}.study-toast{right:12px;bottom:12px}}
+@media(prefers-reduced-motion:reduce){.btn,.option,.mission-ring,.mission-progress span,.answer-track span,.milestone{transition:none!important}.study-toast{animation:none!important}}
+
 </style></head><body data-view="today"><aside class="rail"><div class="brand"><span>✳</span>ITE / study</div><div class="kicker">THE DAILY PRACTICE</div><nav aria-label="Study navigation"><a href="#today" data-view="today" class="active">Daily session</a><a href="#bank" data-view="bank">Question bank</a><a href="#articles" data-view="articles">Article library</a><a href="/analytics">Performance dashboard ↗</a></nav><footer>Vincent Allen<br><small>CA-2 · Anesthesiology<br>Small sessions. Durable recall.</small></footer></aside><main class="shell"><div class="top"><span class="kicker">YOUR DAILY ANESTHESIOLOGY PRACTICE</span><span class="privacy">Private · Owner only</span></div><div class="hero"><div><div class="kicker">VINCENT ALLEN · CA-2</div><h1>Make today count.</h1><p>Learn first. Answer three ITE questions. Build durable recall.</p></div><button class="btn secondary" id="refresh">Check for today’s session ↻</button></div><div id="app" aria-live="polite"><div class="loading">Loading your study workspace…</div></div><div class="footer"><span>Cloudflare D1 · Private study records · America/New_York</span><span>Original practice questions · No predicted ITE percentile</span></div></main><script>/*STUDY_SCRIPT*/</script></body></html>
