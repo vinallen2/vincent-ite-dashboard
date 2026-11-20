@@ -1,7 +1,7 @@
 """OpenAI question authoring client. Does not run until explicitly called.
 
-The API key stays in Railway. Clinical questions require source verification
-and human/independent quality checks before publication.
+The API key stays in Railway. Questions are educational ITE-style practice,
+not official ABA items; their clinical content merits independent review.
 """
 import json
 import logging
@@ -12,13 +12,19 @@ MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-4.1-mini")
 ENDPOINT = "https://api.openai.com/v1/responses"
 
 SYSTEM = """You are authoring original CA-2 anesthesiology ITE practice material.
-Return a valid JSON object only. Begin with a concise teaching review that does not reveal
-answers. Write exactly three clinically realistic, challenging multiple-choice
-questions, each with exactly three answer options labeled A, B, C (or four labeled A, B, C, D), with one unambiguously correct answer each. Two must test application
-and one integration. Give substantive rationales for all answer choices.
-Avoid repeated objectives supplied in context. Do not invent article citations,
-DOIs, guidelines, or URLs. Include at least one HTTPS source per question;\nprefer stable, well-known primary references and flag uncertain citations.
-These are educational practice questions, not official ABA items.
+Return a valid JSON object only. Begin with a concise, high-yield teaching review
+that reinforces foundational physiology, pharmacology, or clinical reasoning without
+revealing the answers. Write exactly THREE original clinical multiple-choice questions
+for a CA-2 resident preparing for the ABA In-Training Examination (ITE).
+Each question must have FOUR plausible answer choices labeled A, B, C, D and exactly
+ONE best answer. Emphasize concepts anesthesiology residents are expected to know,
+including mechanisms, clinical judgment, physiology, drugs, equipment and complications.
+Two questions should test application; one should test integration of two or more ideas.
+Make the difficulty appropriate for the CA-2 ITE: challenging but fair, not obscure
+subspecialty trivia. Use precise, internally consistent patient details and numbers.
+Avoid ambiguous stems, distractors that are obviously absurd, and accidental clues.
+Every option needs a concise, physiologically sound explanation explaining why it is
+correct or incorrect. These are original practice questions, not official ABA items.
 IMPORTANT: The question topics and domains are ASSIGNED by the application. You must write
 Question 1, Question 2 and Question 3 in exactly the order of assigned_questions. Copy
 each assigned domain and topic string VERBATIM into that question's domain and topic
@@ -32,7 +38,7 @@ reveal the keyed answers or rehearse an identical numerical problem. Include one
 spaced-recall concept in that teaching when due_reviews is non-empty, without turning
 a concept tested in the last 14 days into another scored question. Treat due_reviews
 as TEACHING / RETENTION material, NOT a directive to replace assigned questions.
-Never invent DOIs, guideline URLs, primary sources, or references."""
+Do not add fields outside the requested output shape."""
 
 async def draft_session(context: dict, *, kind: str = "daily", model: str | None = None) -> dict:
     """Draft only; caller must validate and verify before persisting."""
@@ -54,8 +60,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
             "last_14_days_topic_repetition": "forbidden for scored questions",
             "due_for_spaced_review": "review briefly in teaching, not by recycling a scored stem",
             "other_questions": "only the three assigned topics, each in the specified domain",
-            "prior_stem_reuse": "forbidden",
-            "source_quality": "reliable reference URLs, do not fabricate citations"
+            "prior_stem_reuse": "forbidden"
         },
         "output_shape": {
             "title": "string",
@@ -65,8 +70,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                 "stem": "string", "domain": "string", "topic": "string",
                 "objective": "string", "difficulty": "application or integration",
                 "level": "basic or advanced", "answer": "A, B, C, or D",
-                "options": [{"id": "A", "text": "string", "explanation": "string"}, {"id": "B", "text": "string", "explanation": "string"}, {"id": "C", "text": "string", "explanation": "string"}, {"id": "D", "text": "string", "explanation": "string"}],
-                "sources": [{"title": "string", "url": "https://source.example/path"}]
+                "options": [{"id": "A", "text": "string", "explanation": "string"}, {"id": "B", "text": "string", "explanation": "string"}, {"id": "C", "text": "string", "explanation": "string"}, {"id": "D", "text": "string", "explanation": "string"}]
             }]
         }
     }, ensure_ascii=False)
@@ -99,8 +103,8 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                     + json.dumps(sorted(rejected_topics), ensure_ascii=False) + ". "
                     "Follow assigned_questions exactly; copy topics and domains verbatim. "
                     "Avoid all topics tested in the previous 14 days. "
-                    "Use three or four complete A/B/C(/D) options per question, "
-                    "with rationale and HTTPS source for each question."
+                    "Use four complete A/B/C/D options per question, "
+                    "each with a concise rationale and one unambiguous best answer."
                 )
             payload = {
                 "model": model or MODEL,
@@ -151,10 +155,8 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                     if stem_is_repeated(question.get("stem", ""), context.get("previous_stems", [])):
                         raise ValueError("Rephrased or recycled question stem")
                     opts = question.get("options", [])
-                    if sorted(o.get("id") for o in opts) not in (
-                        ["A", "B", "C"], ["A", "B", "C", "D"]
-                    ):
-                        raise ValueError("Each question needs A/B/C or A/B/C/D options")
+                    if sorted(o.get("id") for o in opts) != ["A", "B", "C", "D"]:
+                        raise ValueError("Each question needs four A/B/C/D options")
                     if question.get("answer") not in {o["id"] for o in opts}:
                         raise ValueError("Invalid answer key")
                     if not all(o.get("explanation") for o in opts):
