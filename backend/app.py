@@ -33,6 +33,16 @@ async def pending_daily_session(db):
         "ORDER BY s.date ASC LIMIT 1"
     )
 
+async def daily_completed_on(db, today):
+    """No second daily generation after completing a carried-over set today."""
+    return await db.one(
+        "SELECT a.session_id FROM study_attempts a "
+        "JOIN study_sessions s ON s.id=a.session_id "
+        "WHERE s.id LIKE 'CA2-New %' "
+        "AND json_extract(a.result,'$.completionDate')=? "
+        "LIMIT 1", today
+    )
+
 
 
 def create_app(store=None, token=None, now=None):
@@ -52,6 +62,9 @@ def create_app(store=None, token=None, now=None):
         outstanding = await pending_daily_session(db)
         if outstanding:
             log.info('Reusing unanswered daily ITE session %s; no OpenAI request', outstanding['id'])
+            return
+        if await daily_completed_on(db, today):
+            log.info('Daily ITE already completed today via carryover; no OpenAI request')
             return
         context = await build_authoring_context(db,today=today,kind='daily')
         draft = await draft_session(context,kind='daily')
@@ -222,6 +235,9 @@ def create_app(store=None, token=None, now=None):
             outstanding = await pending_daily_session(request.state.study.db)
             if outstanding:
                 return {'status':'carryover','sessionId':outstanding['id'],'created':False}
+            completed = await daily_completed_on(request.state.study.db, today)
+            if completed:
+                return {'status':'completed_today','sessionId':completed['session_id'],'created':False}
         context = await build_authoring_context(request.state.study.db,today=today,kind=kind)
         try:
             draft = await draft_session(context,kind=kind)
