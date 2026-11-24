@@ -8,7 +8,8 @@ import logging
 import os
 import httpx
 
-MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-6.2-astra")
+MODEL = os.getenv("OPENAI_ARTICLE_MODEL", "gpt-4.1")
+QUESTION_MODEL = os.getenv("OPENAI_ITE_MODEL", "gpt-6.2-astra")
 ENDPOINT = "https://api.openai.com/v1/responses"
 
 SYSTEM = """Write ORIGINAL practice questions modeled on the American Board of
@@ -46,8 +47,6 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         raise RuntimeError("OPENAI_API_KEY is missing")
-    selected_model = model or MODEL
-    use_reasoning = selected_model.startswith("gpt-6")
     from .question_plan import make_question_plan, normalized, stem_is_repeated
     assigned_questions = make_question_plan(context)
     from datetime import date
@@ -102,7 +101,7 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
     rejected_topics = set()
     feedback = ""
     logger = logging.getLogger("ite.generation")
-    async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=10.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(35.0, connect=10.0)) as client:
         for attempt in range(3):
             draft = None
             correction = ""
@@ -119,15 +118,13 @@ async def draft_session(context: dict, *, kind: str = "daily", model: str | None
                     "each with a concise rationale and one unambiguous best answer."
                 )
             payload = {
-                "model": selected_model,
+                "model": model or QUESTION_MODEL,
                 "instructions": SYSTEM,
                 "input": "Return only a valid JSON object matching the requested output shape.\n"
                          + prompt + correction,
-                "max_output_tokens": 25000 if use_reasoning else 5000,
+                "max_output_tokens": 5000,
                 "text": {"format": {"type": "json_object"}}
             }
-            if use_reasoning:
-                payload["reasoning"] = {"effort": "high"}
             response = await client.post(ENDPOINT, headers={
                 "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
