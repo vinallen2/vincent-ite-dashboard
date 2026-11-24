@@ -20,6 +20,20 @@ from .d1_http import D1HTTPStore
 
 HEADERS = {'cache-control':'private, no-store, max-age=0','x-content-type-options':'nosniff'}
 
+async def pending_daily_session(db):
+    """Oldest daily set without a graded first attempt, regardless of its date.
+
+    A missed daily set must carry forward until submitted. Bonus sessions do
+    not block daily generation; historical completed sessions never regenerate.
+    """
+    return await db.one(
+        "SELECT s.id,s.date FROM study_sessions s "
+        "LEFT JOIN study_attempts a ON a.session_id=s.id "
+        "WHERE s.id LIKE 'CA2-New %' AND a.session_id IS NULL "
+        "ORDER BY s.date ASC LIMIT 1"
+    )
+
+
 
 def create_app(store=None, token=None, now=None):
     app = FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
@@ -34,6 +48,10 @@ def create_app(store=None, token=None, now=None):
         db = store or D1HTTPStore(os.environ.get('CLOUDFLARE_ACCOUNT_ID'), os.environ.get('CLOUDFLARE_D1_DATABASE_ID'), os.environ.get('CLOUDFLARE_API_TOKEN'))
         session_id = 'CA2-New ' + today
         if await db.one('SELECT id FROM study_sessions WHERE id=?',session_id):
+            return
+        outstanding = await pending_daily_session(db)
+        if outstanding:
+            log.info('Reusing unanswered daily ITE session %s; no OpenAI request', outstanding['id'])
             return
         context = await build_authoring_context(db,today=today,kind='daily')
         draft = await draft_session(context,kind='daily')
@@ -201,6 +219,9 @@ def create_app(store=None, token=None, now=None):
             existing = await request.state.study.db.one('SELECT id FROM study_sessions WHERE id=?',session_id)
             if existing:
                 return {'status':'exists','sessionId':session_id}
+            outstanding = await pending_daily_session(request.state.study.db)
+            if outstanding:
+                return {'status':'carryover','sessionId':outstanding['id'],'created':False}
         context = await build_authoring_context(request.state.study.db,today=today,kind=kind)
         try:
             draft = await draft_session(context,kind=kind)
